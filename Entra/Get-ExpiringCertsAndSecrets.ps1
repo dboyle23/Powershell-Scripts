@@ -26,43 +26,41 @@ $enterpriseAppsWithCertificates = @()
 $today = (Get-Date).Date
 
 # Define required modules
-$modules = @('Microsoft.Graph')
+$modules = @('Microsoft.Graph.Applications')#, 'Microsoft.Graph.ServicePrincipal')
 
-# Ensure all required modules are installed and loaded to the session
-Write-Host 'Ensuring all required Powershell modules are installed and installing any that are missing' -ForegroundColor White
-foreach($module in $modules){
-    if(!(Get-Module $module)){
-        try{
+# Ensure required modules are loaded into the session
+Write-Host 'Checking required PowerShell modules are available and loaded' -ForegroundColor White
+foreach ($module in $modules) {
+    $available = Get-Module -ListAvailable -Name $module
+    if (-not $available) {
+        Write-Host "Module $module is not installed on this system. Please install it (Install-Module -Name $module) and re-run." -ForegroundColor Yellow
+        exit 1
+    }
+
+    if (-not (Get-Module -Name $module)) {
+        try {
             Import-Module $module -ErrorAction Stop
-            Write-Host "Module named $module found locally and imported" -ForegroundColor White
+            Write-Host "Module $module imported into the session" -ForegroundColor Green
         }
-        catch{
-            Write-Host "Module named $module not found - Installing..." -ForegroundColor White
-            try{
-                Install-Module -Name $module -Scope CurrentUser -Force -ErrorAction Stop
-                Write-Host "Module named $module installed successfully" -ForegroundColor Green
-            }
-            catch{
-                Write-Host "Module named $module failed to install" -ForegroundColor Red
-                Write-Host $Error[0] -ForegroundColor Red
-                #Exit 1
-            }
+        catch {
+            Write-Host "Failed to import module $module" -ForegroundColor Red
+            Write-Host $_.Exception.Message -ForegroundColor Red
+            exit 1
         }
     }
-    
-    else{
-        Write-Host "Module named $module already installed and loaded"
+    else {
+        Write-Host "Module $module already loaded" -ForegroundColor White
     }
 }
 
 
 # Connect to Microsoft Graph
 Write-Host 'Attempting to connect to MS Graph interactively' -ForegroundColor White
-try{
+try {
     Connect-MgGraph -Scopes "Application.Read.All" -NoWelcome -ErrorAction Stop
     Write-Host 'Connection to MS Graph succesful' -ForegroundColor Green
 }
-catch{
+catch {
     Write-Host 'Unable to connect to MS Graph' -ForegroundColor Red
     Write-Host $Error[0] -ForegroundColor Red
 }
@@ -74,27 +72,148 @@ Write-Host "$($enterpriseApps.count) enterprise apps found"
 
 # Loop through enterprise apps to determine if app contains a certificate that will expire at some date
 # If true, get appname and days left until expiration and place in PSCustomObject $enterpriseAppsWithCertificates
-foreach($enterpriseApp in $enterpriseApps){
-    $cert = $enterpriseApp.KeyCredentials
-    if($cert){
-        $expirationdate = $cert.EndDateTime.ToLocalTime()
-        $daysRemaining = ($expirationdate - $today).Days
-        $enterpriseAppsWithCertificates += [PSCustomObject]@{
-            AppName = $enterpriseApp.DisplayName
-            DaysRemaining = $daysRemaining
+$i = 0
+if ($enterpriseApps.Count -gt 0) {
+    foreach ($enterpriseApp in $enterpriseApps) {
+        $i++
+        $percent = [int](($i / $enterpriseApps.Count) * 100)
+        Write-Progress -Activity 'Checking enterprise applications' -Status "Processing $i of $enterpriseApps.Count" -PercentComplete $percent
+        $certs = $enterpriseApp.KeyCredentials
+        if ($certs) {
+            foreach ($cert in $certs) {
+                try {
+                    $expirationdate = [DateTime]$cert.EndDateTime.ToLocalTime()
+                }
+                catch {
+                    continue
+                }
+
+                $daysRemaining = ($expirationdate - $today).Days
+                $enterpriseAppsWithCertificates += [PSCustomObject]@{
+                    AppName        = $enterpriseApp.DisplayName
+                    DaysRemaining  = $daysRemaining
+                    ExpirationDate = $expirationdate
+                    KeyId          = $cert.KeyId
+                }
+            }
         }
+    }
+    Write-Progress -Activity 'Checking enterprise applications' -Completed
+}
+
+# If no apps found
+if ($enterpriseAppsWithCertificates.count -lt 1) {
+    Write-Host 'No enterprise apps with certificates found' -ForegroundColor Yellow
+}
+
+# Sort apps by expiration date and show top 10
+else {
+    Write-Host 'The following applications are the next to expire:' -ForegroundColor Yellow
+
+    # For apps with multiple certificates, pick the certificate with the earliest ExpirationDate
+    $collapsed = $enterpriseAppsWithCertificates |
+    Group-Object -Property AppName |
+    ForEach-Object {
+        $_.Group | Sort-Object ExpirationDate | Select-Object -First 1
+    }
+
+    $top = $collapsed | Sort-Object ExpirationDate | Select-Object -First 10
+
+    foreach ($e in $top) {
+        $daysRemaining = ($e.ExpirationDate - $today).Days
+        if ($daysRemaining -le 30) {
+            $color = 'Red'
+        }
+        elseif ($daysRemaining -le 90) {
+            $color = 'Yellow'
+        }
+        else {
+            $color = 'Green'
+        }
+        if ($daysRemaining -lt 0) {
+            $daysRemaining = [Math]::Abs($daysRemaining)
+            Write-Host "$($e.AppName) expired $($daysRemaining) days ago" -ForegroundColor $color
+        }
+        Write-Host "$($e.AppName) will expire in $($daysRemaining) days" -ForegroundColor $color
     }
 }
 
-if($enterpriseAppsWithCertificates.count -lt 1){
-    Write-Host 'No enterprise apps with certificates found' -ForegroundColor Yellow
+
+# Check app registration secrets
+Write-Host "`nChecking app registration secrets" -ForegroundColor White
+$appRegistrationsWithSecrets = @()
+
+# Get all app registrations
+Write-Host 'Getting all app registrations' -ForegroundColor White
+$apps = Get-MgApplication -All -Property DisplayName, passwordCredentials
+Write-Host "$($apps.count) app registrations found"
+
+# Add progress for app registration secrets
+$j = 0
+if ($apps.Count -gt 0) {
+    foreach ($app in $apps) {
+        $j++
+        $percent = [int](($j / $apps.Count) * 100)
+        Write-Progress -Activity 'Checking application registrations (secrets)' -Status "Processing $j of $apps.Count" -PercentComplete $percent
+        $secrets = $app.PasswordCredentials
+        if ($secrets) {
+            foreach ($secret in $secrets) {
+                try {
+                    $expiration = [DateTime]$secret.EndDateTime.ToLocalTime()
+                }
+                catch {
+                    continue
+                }
+
+                $daysRemaining = ($expiration - $today).Days
+                $appRegistrationsWithSecrets += [PSCustomObject]@{
+                    AppName           = $app.DisplayName
+                    DaysRemaining     = $daysRemaining
+                    ExpirationDate    = $expiration
+                    KeyId             = $secret.KeyId
+                    SecretDisplayName = $secret.DisplayName
+                }
+            }
+        }
+    }
+    Write-Progress -Activity 'Checking application registrations (secrets)' -Completed
 }
-else{
-    Write-Host 'The following applications are the next 10 apps to expire' -ForegroundColor Yellow
-    $enterpriseAppsWithCertificates = $enterpriseAppsWithCertificates | Sort-Object ExpirationDate | Select-Object -First 10
-    foreach($e in $enterpriseAppsWithCertificates){
-        Write-Host "$($e.AppName) will expire in $($e.DaysRemaining) days"
-    }    
+
+# No app registration secrets found
+if ($appRegistrationsWithSecrets.count -lt 1) {
+    Write-Host 'No application registration secrets found' -ForegroundColor Yellow
+}
+
+# Sort app registration secrets by expiration date and show top 10
+else {
+    Write-Host 'The following app registrations are the next to expire:' -ForegroundColor Yellow
+
+    $collapsedSecrets = $appRegistrationsWithSecrets |
+    Group-Object -Property AppName |
+    ForEach-Object {
+        $_.Group | Sort-Object ExpirationDate | Select-Object -First 1
+    }
+
+    $topSecrets = $collapsedSecrets | Sort-Object ExpirationDate | Select-Object -First 10
+
+    foreach ($r in $topSecrets) {
+        $daysRemaining = ($r.ExpirationDate - $today).Days
+        if ($daysRemaining -le 30) {
+            $color = 'Red'
+        }
+        elseif ($daysRemaining -le 90) {
+            $color = 'Yellow'
+        }
+        else {
+            $color = 'Green'
+        }
+        if ($daysRemaining -lt 0) {
+            $daysRemaining = [Math]::Abs($daysRemaining)
+            Write-Host "$($r.AppName) secret '$($r.SecretDisplayName)' expired $($daysRemaining) days ago" -ForegroundColor $color
+            continue
+        }
+        Write-Host "$($r.AppName) expires in $($daysRemaining) days" -ForegroundColor $color
+    }
 }
 
 
