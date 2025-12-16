@@ -6,7 +6,6 @@ A collection of PowerShell scripts for work and personal projects that I use to 
 - [Prerequisites](#prerequisites)
 - [Scripts](#scripts)
 - [Configuration](#configuration)
-- [Contributing](#contributing)
 - [License](#license)
 
 ## Prerequisites
@@ -16,19 +15,14 @@ A collection of PowerShell scripts for work and personal projects that I use to 
 
 ## Scripts
 
-- `Entra/Get-ExpiringCertsAndSecrets.ps1` — Checks enterprise applications for
-	expiring certificates and application registrations for expiring client secrets,
-    then orders them by soonest expiration.
+- `Entra/Get-ExpiringCertsAndSecrets.ps1` — Checks enterprise applications for expiring certificates and application 
+	registrations for expiring client secrets, then orders them by soonest expiration.
 
 ## Configuration
 
 - The scripts intentionally do not auto-install modules. Install required modules manually to
 	control scope and avoid large imports.
 - The Graph sign-in in these scripts uses interactive authentication. Other authentication methods may come in the future.
-
-## Contributing
-
-- Fork → branch → PR. Keep changes focused and add tests or examples for new scripts.
 
 ## License
 
