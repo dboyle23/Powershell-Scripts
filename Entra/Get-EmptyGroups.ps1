@@ -1,3 +1,20 @@
+<#
+.SYNOPSIS
+    This script is designed to find all groups in Entra ID that contain no members.
+
+.DESCRIPTION
+    This script checks for all required modules, installs them if not present, connects to MS Graph, gets
+    all the groups and reports on which ones have no members.
+
+.NOTES
+    Author: Daniel Boyle
+    Date: 12/16/2025
+    Version: 0.1
+    Requires: PowerShell 7+ or Powershell Core on Mac/Linux
+    
+.LINK
+    https://learn.microsoft.com/en-us/graph/
+#>
 # Define required modules
 $modules = @('Microsoft.Graph.Groups')
 
