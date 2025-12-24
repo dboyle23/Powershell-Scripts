@@ -17,6 +17,8 @@ A collection of PowerShell scripts for work and personal projects that I use to 
 
 - `Entra/Get-ExpiringCertsAndSecrets.ps1` — Checks enterprise applications for expiring certificates and application 
 	registrations for expiring client secrets, then orders them by soonest expiration.
+- `Entra/Get-InactiveUsers.ps1` — Identifies inactive users in Entra ID based on last sign-in activity. Normal users are 
+	considered inactive after 90 days, guest users after 30 days.
 
 ## Configuration
 
