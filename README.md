@@ -17,6 +17,8 @@ A collection of PowerShell scripts for work and personal projects that I use to 
 
 - `Entra/Get-ExpiringCertsAndSecrets.ps1` — Checks enterprise applications for expiring certificates and application 
 	registrations for expiring client secrets, then orders them by soonest expiration.
+- `Entra/Get-InactiveApps.ps1` — Identifies inactive enterprise applications by checking sign-in activity over the last 
+	30 days and displays apps with no recent sign-ins.
 
 ## Configuration
 
