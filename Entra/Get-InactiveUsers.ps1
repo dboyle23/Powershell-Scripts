@@ -58,7 +58,7 @@ foreach ($module in $modules) {
 Write-Host 'Attempting to connect to MS Graph interactively' -ForegroundColor White
 try {
     Connect-MgGraph -Scopes "User.Read.All", "AuditLog.Read.All" -NoWelcome -ErrorAction Stop
-    Write-Host 'Connection to MS Graph succesful' -ForegroundColor Green
+    Write-Host 'Connection to MS Graph successful' -ForegroundColor Green
 }
 catch {
     Write-Host 'Unable to connect to MS Graph' -ForegroundColor Red
@@ -119,7 +119,7 @@ if ($users.Count -gt 0) {
         
         # Determine if user is inactive
         $isInactive = $false
-        if ($daysSinceSignIn -eq $null) {
+        if ($null -eq $daysSinceSignIn) {
             # Never signed in
             $isInactive = $true
         }
