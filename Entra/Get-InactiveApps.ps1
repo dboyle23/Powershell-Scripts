@@ -58,7 +58,7 @@ foreach ($module in $modules) {
 Write-Host 'Attempting to connect to MS Graph interactively' -ForegroundColor White
 try {
     Connect-MgGraph -Scopes "Application.Read.All", "AuditLog.Read.All" -NoWelcome -ErrorAction Stop
-    Write-Host 'Connection to MS Graph succesful' -ForegroundColor Green
+    Write-Host 'Connection to MS Graph successful' -ForegroundColor Green
 }
 catch {
     Write-Host 'Unable to connect to MS Graph' -ForegroundColor Red
@@ -81,7 +81,7 @@ if ($enterpriseApps.Count -gt 0) {
         
         try {
             # Get sign-in logs for this app
-            $signIns = Get-MgAuditLogSignIn -Filter "appId eq '$($enterpriseApp.AppId)' and createdDateTime ge $($cutoffDate.ToString('yyyy-MM-ddTHH:mm:ssZ'))" -Top 1 -ErrorAction SilentlyContinue
+            $signIns = Get-MgAuditLogSignIn -Filter "appId eq '$($enterpriseApp.AppId)' and createdDateTime ge $($cutoffDate.ToString('yyyy-MM-ddTHH:mm:ss.fffZ'))" -Top 1 -ErrorAction SilentlyContinue
             
             if ($signIns -and $signIns.Count -gt 0) {
                 # App has sign-ins in the last 30 days
@@ -102,7 +102,9 @@ if ($enterpriseApps.Count -gt 0) {
             }
         }
         catch {
-            # If we can't get sign-in data, consider it inactive
+            # Log the error but continue processing
+            Write-Verbose "Unable to retrieve sign-in data for $($enterpriseApp.DisplayName): $($_.Exception.Message)"
+            # Consider app inactive if we can't retrieve sign-in data
             $inactiveApps += [PSCustomObject]@{
                 AppName          = $enterpriseApp.DisplayName
                 AppId            = $enterpriseApp.AppId
